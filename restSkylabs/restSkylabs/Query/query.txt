@@ -1,0 +1,13 @@
+/*numero di persone con meno di 30 anni che
+guadagnano più di 50.000 dollari l'anno*/
+SELECT count(*) as persone_under30
+FROM records 
+WHERE age < 30 AND over_50k = true
+
+
+/*guadagno di capitale medio per ogni categoria
+lavorativa*/
+SELECT t2.name as categoria_lavorativa,AVG(capital_gain - capital_loss) as capitale_medio
+FROM records as t1
+LEFT JOIN occupations as t2 ON t1.occupation_id = t2.id
+GROUP BY t2.name
