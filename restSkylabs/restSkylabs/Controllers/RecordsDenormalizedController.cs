@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using PoweredSoft.DynamicLinq;
 using RecordsCsvResults.Models;
 using restSkylabs.DAL;
 using restSkylabs.Model;
@@ -25,8 +26,22 @@ namespace WebAPISkylabs.Controllers
             _logger = logger;
         }
 
-
         // GET: api/RecordsDenormalized
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<Records>>> GetRecords()
+        {
+            _logger.LogInformation("Return records");
+            return await _context.Records.Include(w => w.Workclasses)
+                                         .Include(w => w.Relationships)
+                                         .Include(w => w.Sexes)
+                                         .Include(w => w.Races)
+                                         .Include(w => w.Occupations)
+                                         .Include(w => w.Marital_Statuses)
+                                         .Include(w => w.Education_Levels)
+                                         .Include(w => w.Countries).ToListAsync();
+        }
+
+        // GET: api/RecordsDenormalized/pagination
         //https://localhost:5001/api/RecordsDenormalized/pagination?offset=2&count=5
         [HttpGet("pagination")]
         public async Task<ActionResult<IEnumerable<Records>>> GetRecords(int offset, int count)
@@ -42,15 +57,16 @@ namespace WebAPISkylabs.Controllers
                                          .Include(w => w.Marital_Statuses)
                                          .Include(w => w.Education_Levels)
                                          .Include(w => w.Countries)
+                                         .OrderBy(w => w.ID_Records)
                                          .Skip(offset)
                                          .Take(count).ToListAsync();
         }
 
-
+        // GET: api/RecordsDenormalized/downloadCSV
         [HttpGet("downloadCSV")]
         public IActionResult Download()
         {
-            List<Records> recordsData = _context.Records.Include(w => w.Workclasses)
+            IEnumerable<Records> recordsData = _context.Records.Include(w => w.Workclasses)
                                          .Include(w => w.Relationships)
                                          .Include(w => w.Sexes)
                                          .Include(w => w.Races)
@@ -58,87 +74,53 @@ namespace WebAPISkylabs.Controllers
                                          .Include(w => w.Marital_Statuses)
                                          .Include(w => w.Education_Levels)
                                          .Include(w => w.Countries).ToList();
+
+
             string fileDownloadName = "records.csv";
             return new RecordsCsvResult(recordsData, fileDownloadName);
         }
 
-        // GET: api/RecordsDenormalized/5
-        //[HttpGet("{id}")]
-        //public async Task<ActionResult<Records>> GetRecords(int id)
-        //{
-        //    var records = await _context.Records.FindAsync(id);
+        // GET: api/RecordsDenormalized/statistics
+        //https://localhost:5001/api/RecordsDenormalized/statistics?aggregationType=Age&aggregationValue=30
+        [HttpGet("statistics")]
+        public ActionResult<RecordsStatistics> Statistics(string aggregationType, int aggregationValue)
+        {
 
-        //    if (records == null)
-        //    {
-        //        return NotFound();
-        //    }
+            IEnumerable<Records> recordsData = _context.Records.Include(w => w.Workclasses)
+                                         .Include(w => w.Relationships)
+                                         .Include(w => w.Sexes)
+                                         .Include(w => w.Races)
+                                         .Include(w => w.Occupations)
+                                         .Include(w => w.Marital_Statuses)
+                                         .Include(w => w.Education_Levels)
+                                         .Include(w => w.Countries).ToList();
 
-        //    return records;
-        //}
+                switch (aggregationType.ToLower())
+                {
+                    case "age":
+                    recordsData = recordsData.Where(w => w.Age == aggregationValue);
+                        break;
+                    case "education_level_id":
+                    recordsData = recordsData.Where(w => w.Education_Level_ID == aggregationValue);
+                        break;
+                    case "occupation_id":
+                    recordsData = recordsData.Where(w => w.Occupation_ID == aggregationValue);
+                        break;
+                }
 
-        // PUT: api/RecordsDenormalized/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for
-        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
-        //[HttpPut("{id}")]
-        //public async Task<IActionResult> PutRecords(int id, Records records)
-        //{
-        //    if (id != records.ID_Records)
-        //    {
-        //        return BadRequest();
-        //    }
+            RecordsStatistics statistics = new RecordsStatistics();
 
-        //    _context.Entry(records).State = EntityState.Modified;
+            statistics.AggregationType = aggregationType;
+            statistics.AggregationFilter = aggregationValue;
+            statistics.Capital_Gain_Sum = recordsData.Sum(w => w.Capital_Gain); 
+            statistics.Capital_Gain_Avg = recordsData.Select(w => w.Capital_Gain).Average(); 
+            statistics.Capital_Loss_Avg = recordsData.Select(w => w.Capital_Loss).Average();
+            statistics.Capital_Loss_Sum = recordsData.Sum(w => w.Capital_Loss);
+            statistics.Over_50k_count = recordsData.Where(w => w.Over_50k == true).Count();
+            statistics.Under_50k_count = recordsData.Where(w => w.Over_50k == false).Count();
 
-        //    try
-        //    {
-        //        await _context.SaveChangesAsync();
-        //    }
-        //    catch (DbUpdateConcurrencyException)
-        //    {
-        //        if (!RecordsExists(id))
-        //        {
-        //            return NotFound();
-        //        }
-        //        else
-        //        {
-        //            throw;
-        //        }
-        //    }
+            return statistics;
+        }
 
-        //    return NoContent();
-        //}
-
-        // POST: api/RecordsDenormalized
-        // To protect from overposting attacks, enable the specific properties you want to bind to, for
-        // more details, see https://go.microsoft.com/fwlink/?linkid=2123754.
-        //[HttpPost]
-        //public async Task<ActionResult<Records>> PostRecords(Records records)
-        //{
-        //    _context.Records.Add(records);
-        //    await _context.SaveChangesAsync();
-
-        //    return CreatedAtAction("GetRecords", new { id = records.ID_Records }, records);
-        //}
-
-        //// DELETE: api/RecordsDenormalized/5
-        //[HttpDelete("{id}")]
-        //public async Task<ActionResult<Records>> DeleteRecords(int id)
-        //{
-        //    var records = await _context.Records.FindAsync(id);
-        //    if (records == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    _context.Records.Remove(records);
-        //    await _context.SaveChangesAsync();
-
-        //    return records;
-        //}
-
-        //private bool RecordsExists(int id)
-        //{
-        //    return _context.Records.Any(e => e.ID_Records == id);
-        //}
     }
 }
